@@ -28,6 +28,7 @@ async function run() {
     await client.connect();
 
     const usersCollection = client.db('SkyTower').collection('users');
+    const announcementsCollection = client.db('SkyTower').collection('announcements');
 
 
     // users 
@@ -37,11 +38,6 @@ async function run() {
 
       if (email) {
         const user = await usersCollection.findOne({ email: email });
-        // if (user) {
-        //   res.send(user);
-        // } else {
-        //   res.status(404).send({ message: 'User not found' });
-        // }
         res.send(user)
       } else {
         const users = await usersCollection.find().toArray();
@@ -62,6 +58,13 @@ async function run() {
       // Insert new user
       const result = await usersCollection.insertOne(user);
       res.status(201).json({ message: 'User created', insertedId: result.insertedId });
+    })
+
+
+    // Announcements
+    app.get('/announcements' , async(req , res)=>{
+      const result = await announcementsCollection.find().toArray();
+      res.send(result);
     })
 
 
