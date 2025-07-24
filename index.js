@@ -29,6 +29,7 @@ async function run() {
     const usersCollection = client.db("SkyTower").collection("users");
     const apartmentsCollection = client.db("SkyTower").collection("apartments");
     const agreementsCollection = client.db("SkyTower").collection("agreements");
+    const couponsCollection = client.db("SkyTower").collection("coupons");
     const announcementsCollection = client
       .db("SkyTower")
       .collection("announcements");
@@ -233,6 +234,31 @@ async function run() {
         res.status(201).json({ message: "Announcement created successfully" });
       } catch (error) {
         res.status(500).json({ error: "Failed to create announcement" });
+      }
+    });
+
+    // coupons
+
+    app.get("/coupons", async (req, res) => {
+      try {
+        const coupons = await couponsCollection.find().toArray();
+        res.send(coupons);
+      } catch (error) {
+        console.error("Failed to fetch coupons:", error);
+        res
+          .status(500)
+          .send({ message: "Server error while fetching coupons" });
+      }
+    });
+
+    app.post("/coupons", async (req, res) => {
+      try {
+        const coupon = req.body;
+        const result = await couponsCollection.insertOne(coupon);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("Failed to add coupon:", error);
+        res.status(500).send({ message: "Server error while adding coupon" });
       }
     });
 
