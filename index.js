@@ -195,6 +195,25 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/announcements", async (req, res) => {
+      try {
+        const { title, description, importance, type } = req.body;
+
+        const newAnnouncement ={
+          title,
+          description,
+          importance,
+          type,
+          createdAt: new Date(),
+        };
+
+        const result = await announcementsCollection.insertOne(newAnnouncement);
+        res.status(201).json({ message: "Announcement created successfully" });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to create announcement" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
