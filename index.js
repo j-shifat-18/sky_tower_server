@@ -126,6 +126,15 @@ async function run() {
           return res.status(400).send({ message: "Missing required fields" });
         }
 
+        const { userEmail } = req.body;
+        const existing = await agreementsCollection.findOne({ userEmail });
+
+        if (existing) {
+        return res
+          .status(400)
+          .json({ message: "User already has an agreement." });
+      }
+
         agreement.createdAt = new Date();
         const result = await agreementsCollection.insertOne(agreement);
         res.send(result);
