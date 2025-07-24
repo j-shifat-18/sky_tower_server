@@ -28,6 +28,7 @@ async function run() {
 
     const usersCollection = client.db("SkyTower").collection("users");
     const apartmentsCollection = client.db("SkyTower").collection("apartments");
+    const agreementsCollection = client.db("SkyTower").collection("agreements");
     const announcementsCollection = client
       .db("SkyTower")
       .collection("announcements");
@@ -96,7 +97,43 @@ async function run() {
       }
     });
 
-    
+    // agreements
+    app.get("/agreements", async (req, res) => {
+      try {
+        const { email } = req.query;
+        let query = {};
+        if (email) query.userEmail = email;
+
+        const agreements = await agreementsCollection.find(query).toArray();
+        res.send(agreements);
+      } catch (error) {
+        console.error("Error fetching agreements:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    app.post("/agreements", async (req, res) => {
+      try {
+        const agreement = req.body;
+
+        if (
+          !agreement.userEmail ||
+          !agreement.apartmentNo ||
+          !agreement.floor ||
+          !agreement.block ||
+          !agreement.rent
+        ) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+
+        agreement.createdAt = new Date();
+        const result = await agreementsCollection.insertOne(agreement);
+        res.send(result);
+      } catch (error) {
+        console.error("Error adding agreement:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
 
     // Announcements
     app.get("/announcements", async (req, res) => {
