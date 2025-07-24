@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -64,6 +64,15 @@ async function run() {
       res
         .status(201)
         .json({ message: "User created", insertedId: result.insertedId });
+    });
+
+    app.patch("/users", async (req, res) => {
+      const { email, role } = req.body;
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: { role } }
+      );
+      res.send(result);
     });
 
     // Apartments
@@ -130,10 +139,10 @@ async function run() {
         const existing = await agreementsCollection.findOne({ userEmail });
 
         if (existing) {
-        return res
-          .status(400)
-          .json({ message: "User already has an agreement." });
-      }
+          return res
+            .status(400)
+            .json({ message: "User already has an agreement." });
+        }
 
         agreement.createdAt = new Date();
         const result = await agreementsCollection.insertOne(agreement);
@@ -142,6 +151,42 @@ async function run() {
         console.error("Error adding agreement:", error);
         res.status(500).send({ message: "Internal server error" });
       }
+    });
+
+    // PATCH: Accept agreement & update role
+    app.patch("/agreements/:id/accept", async (req, res) => {
+      const id = req.params.id;
+      const agreementFilter = { _id: new ObjectId(id) };
+      const agreementUpdate = { $set: { status: "checked" } };
+
+      const agreementResult = await agreementsCollection.updateOne(
+        agreementFilter,
+        agreementUpdate
+      );
+
+      const { email } = req.body;
+      const userFilter = { email };
+      const roleUpdate = { $set: { role: "member" } };
+
+      const userResult = await usersCollection.updateOne(
+        userFilter,
+        roleUpdate
+      );
+
+      res.send({ agreementResult, userResult });
+    });
+
+    // PATCH: Reject agreement (no role change)
+    app.patch("/agreements/:id/reject", async (req, res) => {
+      const id = req.params.id;
+      const agreementFilter = { _id: new ObjectId(id) };
+      const agreementUpdate = { $set: { status: "checked" } };
+
+      const result = await agreementsCollection.updateOne(
+        agreementFilter,
+        agreementUpdate
+      );
+      res.send(result);
     });
 
     // Announcements
