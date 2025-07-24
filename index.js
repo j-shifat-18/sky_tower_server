@@ -35,15 +35,35 @@ async function run() {
 
     // users
 
-    app.get("/users", async (req, res) => {
-      const email = req.query.email;
+    // app.get("/users", async (req, res) => {
+    //   const email = req.query.email;
 
-      if (email) {
-        const user = await usersCollection.findOne({ email: email });
-        res.send(user);
-      } else {
-        const users = await usersCollection.find().toArray();
+    //   if (email) {
+    //     const user = await usersCollection.findOne({ email: email });
+    //     res.send(user);
+    //   } else {
+    //     const users = await usersCollection.find().toArray();
+    //     res.send(users);
+    //   }
+    // });
+
+    app.get("/users", async (req, res) => {
+      const { email, role } = req.query;
+
+      const filter = {};
+      if (email) filter.email = email;
+      if (role) filter.role = role;
+
+      try {
+        const users = await usersCollection.find(filter).toArray();
+        // If specific email is queried and only one result is expected
+        if (email && !role) {
+          return res.send(users[0] || null);
+        }
         res.send(users);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch users" });
       }
     });
 
@@ -67,11 +87,13 @@ async function run() {
     });
 
     app.patch("/users", async (req, res) => {
-      const { email, role } = req.body;
-      const result = await usersCollection.updateOne(
-        { email },
-        { $set: { role } }
-      );
+      const email = req.query.email;
+      const updateDoc = {
+        $set: {
+          role: req.body.role, // expected: 'user'
+        },
+      };
+      const result = await usersCollection.updateOne({ email }, updateDoc);
       res.send(result);
     });
 
@@ -199,7 +221,7 @@ async function run() {
       try {
         const { title, description, importance, type } = req.body;
 
-        const newAnnouncement ={
+        const newAnnouncement = {
           title,
           description,
           importance,
