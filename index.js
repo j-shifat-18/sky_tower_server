@@ -144,6 +144,33 @@ async function run() {
       }
     });
 
+    app.get("/member-agreements", async (req, res) => {
+      try {
+        const { email } = req.query;
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+
+        // Check user role by email
+        const user = await usersCollection.findOne({ email });
+
+        if (!user || user.role !== "member") {
+          return res
+            .status(403)
+            .send({ message: "Access denied. Only members allowed." });
+        }
+
+        // Get agreements for the user
+        const agreements = await agreementsCollection
+          .findOne({ userEmail: email });
+
+        res.send(agreements);
+      } catch (error) {
+        console.error("Error fetching member agreements:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
     app.post("/agreements", async (req, res) => {
       try {
         const agreement = req.body;
