@@ -290,8 +290,19 @@ async function run() {
     });
 
     // payment history
+    // Example Express.js route
+    app.get("/payments", async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.status(400).send({ error: "Email is required" });
 
-    
+      const payments = await paymentsCollection
+        .find({ email })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(payments);
+    });
+
     app.post("/payments", async (req, res) => {
       try {
         const paymentData = req.body;
