@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ async function run() {
     const usersCollection = client.db("SkyTower").collection("users");
     const apartmentsCollection = client.db("SkyTower").collection("apartments");
     const agreementsCollection = client.db("SkyTower").collection("agreements");
+    const paymentsCollection = client.db("SkyTower").collection("payments");
     const couponsCollection = client.db("SkyTower").collection("coupons");
     const announcementsCollection = client
       .db("SkyTower")
@@ -161,8 +163,9 @@ async function run() {
         }
 
         // Get agreements for the user
-        const agreements = await agreementsCollection
-          .findOne({ userEmail: email });
+        const agreements = await agreementsCollection.findOne({
+          userEmail: email,
+        });
 
         res.send(agreements);
       } catch (error) {
@@ -264,6 +267,42 @@ async function run() {
       }
     });
 
+    // Payment
+
+    // payment-intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const { rent } = req.body;
+      const amount = parseInt(rent * 100); // Stripe uses cents
+
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Payment Intent Error", error });
+      }
+    });
+
+    // payment history
+
+    
+    app.post("/payments", async (req, res) => {
+      try {
+        const paymentData = req.body;
+        const result = await paymentsCollection.insertOne(paymentData);
+        res.send(result);
+      } catch (error) {
+        console.error("Payment save error:", error);
+        res.status(500).send({ message: "Failed to save payment" });
+      }
+    });
+
     // coupons
 
     app.get("/coupons", async (req, res) => {
@@ -275,6 +314,42 @@ async function run() {
         res
           .status(500)
           .send({ message: "Server error while fetching coupons" });
+      }
+    });
+
+    app.get("/validate-coupon", async (req, res) => {
+      try {
+        const { code } = req.query;
+
+        if (!code) {
+          return res
+            .status(400)
+            .send({ valid: false, message: "Coupon code is required" });
+        }
+
+        const coupon = await couponsCollection.findOne({ code });
+
+        if (!coupon) {
+          return res.send({ valid: false, message: "Coupon not found" });
+        }
+
+        const currentDate = new Date();
+        const expiryDate = new Date(coupon.expiryDate);
+
+        if (expiryDate < currentDate) {
+          return res.send({ valid: false, message: "Coupon has expired" });
+        }
+
+        res.send({
+          valid: true,
+          discountPercentage: Number(coupon.discount), // Ensure it's a number
+          message: "Coupon applied successfully",
+        });
+      } catch (error) {
+        console.error("Error validating coupon:", error);
+        res
+          .status(500)
+          .send({ valid: false, message: "Internal server error" });
       }
     });
 
