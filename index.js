@@ -3,13 +3,65 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const admin = require("firebase-admin");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// firebase admin setup
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+
+const serviceAccount = JSON.parse(decoded);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:5173", // dev environment
+  // 'https://your-frontend-domain.com', // production frontend URL
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
+
+// verify firebase token
+
+const verifyFBToken = async (req, res, next) => {
+  const authorization = req.headers.authorization;
+  if (!authorization?.startsWith("Bearer ")) {
+    return res
+      .status(401)
+      .send({ error: true, message: "Unauthorized access" });
+  }
+
+  const token = authorization.split(" ")[1];
+
+  try {
+    const decodedUser = await admin.auth().verifyIdToken(token);
+    req.decoded = decodedUser;
+    next();
+  } catch (error) {
+    return res.status(403).send({ error: true, message: "Forbidden" });
+  }
+};
+
+// verify admin
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psjt8aa.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -36,21 +88,31 @@ async function run() {
       .db("SkyTower")
       .collection("announcements");
 
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.decoded?.email;
+        if (!email) {
+          return res.status(401).send({ error: true, message: "Unauthorized" });
+        }
+
+        const user = await usersCollection.findOne({ email });
+
+        if (!user || user.role !== "admin") {
+          return res
+            .status(403)
+            .send({ error: true, message: "Forbidden: Admins only" });
+        }
+
+        next();
+      } catch (error) {
+        console.error("Admin check error:", error);
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    };
+
     // users
 
-    // app.get("/users", async (req, res) => {
-    //   const email = req.query.email;
-
-    //   if (email) {
-    //     const user = await usersCollection.findOne({ email: email });
-    //     res.send(user);
-    //   } else {
-    //     const users = await usersCollection.find().toArray();
-    //     res.send(users);
-    //   }
-    // });
-
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyFBToken, async (req, res) => {
       const { email, role } = req.query;
 
       const filter = {};
@@ -70,7 +132,7 @@ async function run() {
       }
     });
 
-    app.post("/users", async (req, res) => {
+    app.post("/users", verifyFBToken, async (req, res) => {
       const user = req.body;
       if (!user.email) {
         return res.status(400).json({ message: "Email is required" });
@@ -89,7 +151,7 @@ async function run() {
         .json({ message: "User created", insertedId: result.insertedId });
     });
 
-    app.patch("/users", async (req, res) => {
+    app.patch("/users", verifyFBToken, verifyAdmin, async (req, res) => {
       const email = req.query.email;
       const updateDoc = {
         $set: {
@@ -132,7 +194,7 @@ async function run() {
     });
 
     // agreements
-    app.get("/agreements", async (req, res) => {
+    app.get("/agreements", verifyFBToken, async (req, res) => {
       try {
         const { email } = req.query;
         let query = {};
@@ -146,7 +208,7 @@ async function run() {
       }
     });
 
-    app.get("/member-agreements", async (req, res) => {
+    app.get("/member-agreements", verifyFBToken, async (req, res) => {
       try {
         const { email } = req.query;
         if (!email) {
@@ -174,7 +236,7 @@ async function run() {
       }
     });
 
-    app.post("/agreements", async (req, res) => {
+    app.post("/agreements", verifyFBToken, async (req, res) => {
       try {
         const agreement = req.body;
 
@@ -207,48 +269,58 @@ async function run() {
     });
 
     // PATCH: Accept agreement & update role
-    app.patch("/agreements/:id/accept", async (req, res) => {
-      const id = req.params.id;
-      const agreementFilter = { _id: new ObjectId(id) };
-      const agreementUpdate = { $set: { status: "checked" } };
+    app.patch(
+      "/agreements/:id/accept",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const agreementFilter = { _id: new ObjectId(id) };
+        const agreementUpdate = { $set: { status: "checked" } };
 
-      const agreementResult = await agreementsCollection.updateOne(
-        agreementFilter,
-        agreementUpdate
-      );
+        const agreementResult = await agreementsCollection.updateOne(
+          agreementFilter,
+          agreementUpdate
+        );
 
-      const { email } = req.body;
-      const userFilter = { email };
-      const roleUpdate = { $set: { role: "member" } };
+        const { email } = req.body;
+        const userFilter = { email };
+        const roleUpdate = { $set: { role: "member" } };
 
-      const userResult = await usersCollection.updateOne(
-        userFilter,
-        roleUpdate
-      );
+        const userResult = await usersCollection.updateOne(
+          userFilter,
+          roleUpdate
+        );
 
-      res.send({ agreementResult, userResult });
-    });
+        res.send({ agreementResult, userResult });
+      }
+    );
 
     // PATCH: Reject agreement (no role change)
-    app.patch("/agreements/:id/reject", async (req, res) => {
-      const id = req.params.id;
-      const agreementFilter = { _id: new ObjectId(id) };
-      const agreementUpdate = { $set: { status: "checked" } };
+    app.patch(
+      "/agreements/:id/reject",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const agreementFilter = { _id: new ObjectId(id) };
+        const agreementUpdate = { $set: { status: "checked" } };
 
-      const result = await agreementsCollection.updateOne(
-        agreementFilter,
-        agreementUpdate
-      );
-      res.send(result);
-    });
+        const result = await agreementsCollection.updateOne(
+          agreementFilter,
+          agreementUpdate
+        );
+        res.send(result);
+      }
+    );
 
     // Announcements
-    app.get("/announcements", async (req, res) => {
+    app.get("/announcements", verifyFBToken, async (req, res) => {
       const result = await announcementsCollection.find().toArray();
       res.send(result);
     });
 
-    app.post("/announcements", async (req, res) => {
+    app.post("/announcements", verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const { title, description, importance, type } = req.body;
 
@@ -270,7 +342,7 @@ async function run() {
     // Payment
 
     // payment-intent
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyFBToken, async (req, res) => {
       const { rent } = req.body;
       const amount = parseInt(rent * 100); // Stripe uses cents
 
@@ -291,7 +363,7 @@ async function run() {
 
     // payment history
     // Example Express.js route
-    app.get("/payments", async (req, res) => {
+    app.get("/payments", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       if (!email) return res.status(400).send({ error: "Email is required" });
 
@@ -303,7 +375,7 @@ async function run() {
       res.send(payments);
     });
 
-    app.post("/payments", async (req, res) => {
+    app.post("/payments", verifyFBToken, async (req, res) => {
       try {
         const paymentData = req.body;
         const result = await paymentsCollection.insertOne(paymentData);
@@ -328,7 +400,7 @@ async function run() {
       }
     });
 
-    app.get("/validate-coupon", async (req, res) => {
+    app.get("/validate-coupon", verifyFBToken, async (req, res) => {
       try {
         const { code } = req.query;
 
@@ -364,7 +436,7 @@ async function run() {
       }
     });
 
-    app.post("/coupons", async (req, res) => {
+    app.post("/coupons", verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const coupon = req.body;
         const result = await couponsCollection.insertOne(coupon);
