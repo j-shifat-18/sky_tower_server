@@ -20,24 +20,30 @@ admin.initializeApp({
 });
 
 // Middleware
-const allowedOrigins = [
-  "http://localhost:5173", // dev environment
-  // 'https://your-frontend-domain.com', // production frontend URL
-];
+// const allowedOrigins = [
+//   "http://localhost:5173", // dev environment
+//   'https://skytower-8931f.web.app/', // production frontend URL
+// ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        return callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-  })
-);
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       if (!origin) return callback(null, true);
+//       if (allowedOrigins.includes(origin)) {
+//         return callback(null, true);
+//       } else {
+//         return callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true,
+//   })
+// );
+
+app.use(cors({
+  origin: 'https://skytower-8931f.web.app', // your frontend origin
+  credentials: true // if you're using cookies/auth headers
+}));
+
 app.use(express.json());
 
 // verify firebase token
@@ -77,7 +83,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const usersCollection = client.db("SkyTower").collection("users");
     const apartmentsCollection = client.db("SkyTower").collection("apartments");
@@ -488,10 +494,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
