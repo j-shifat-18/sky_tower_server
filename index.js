@@ -193,6 +193,15 @@ async function run() {
       }
     });
 
+    app.get("/apartments/all", async (req, res) => {
+      try {
+        const apartments = await apartmentsCollection.find().toArray();
+        res.send(apartments);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch all apartments" });
+      }
+    });
+
     // agreements
     app.get("/agreements", verifyFBToken, async (req, res) => {
       try {
@@ -444,6 +453,37 @@ async function run() {
       } catch (error) {
         console.error("Failed to add coupon:", error);
         res.status(500).send({ message: "Server error while adding coupon" });
+      }
+    });
+
+    app.get("/coupons/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const coupon = await couponsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!coupon)
+          return res.status(404).send({ message: "Coupon not found" });
+        res.send(coupon);
+      } catch (error) {
+        console.error("Failed to fetch coupon:", error);
+        res.status(500).send({ message: "Server error while fetching coupon" });
+      }
+    });
+
+    // PATCH update coupon (only expiryDate editable)
+    app.patch("/coupons/:id", verifyFBToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { expiryDate } = req.body;
+        const result = await couponsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { expiryDate } }
+        );
+        res.send(result);
+      } catch (error) {
+        console.error("Failed to update coupon:", error);
+        res.status(500).send({ message: "Server error while updating coupon" });
       }
     });
 
