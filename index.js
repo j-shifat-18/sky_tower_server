@@ -206,6 +206,23 @@ async function run() {
       }
     });
 
+    app.get("/apartments/:id", async (req, res) => {
+      try {
+
+
+        const apartment = await apartmentsCollection.findOne({ _id: req.params.id });
+        // If _id is ObjectId, use: { _id: new ObjectId(req.params.id) }
+
+        if (!apartment) {
+          return res.status(404).json({ message: "Apartment not found" });
+        }
+        res.json(apartment);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+
     // agreements
     app.get("/agreements", verifyFBToken, async (req, res) => {
       try {
