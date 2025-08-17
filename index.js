@@ -19,30 +19,28 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// Middleware
-// const allowedOrigins = [
-//   "http://localhost:5173", // dev environment
-//   'https://skytower-8931f.web.app/', // production frontend URL
-// ];
+const allowedOrigins = [
+  "https://skytower-8931f.web.app",
+  "http://localhost:5173",
+];
 
-// app.use(
-//   cors({
-//     origin: function (origin, callback) {
-//       if (!origin) return callback(null, true);
-//       if (allowedOrigins.includes(origin)) {
-//         return callback(null, true);
-//       } else {
-//         return callback(new Error("Not allowed by CORS"));
-//       }
-//     },
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 
-app.use(cors({
-  origin: 'https://skytower-8931f.web.app', // your frontend origin
-  credentials: true // if you're using cookies/auth headers
-}));
+// app.use(cors({
+//   origin: 'https://skytower-8931f.web.app', // your frontend origin
+//   credentials: true // if you're using cookies/auth headers
+// }));
 
 app.use(express.json());
 
@@ -171,7 +169,7 @@ async function run() {
     // Apartments
     app.get("/apartments", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
-      const limit = 6;
+      const limit = 12;
       const skip = (page - 1) * limit;
 
       const minRent = parseInt(req.query.minRent) || 0;
